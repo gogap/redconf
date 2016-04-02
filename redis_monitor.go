@@ -97,7 +97,7 @@ func (p *RedisMonitor) watchNamespace(namespace string, callback KeyContentChang
 		return
 	}
 
-	sub := &redis.PubSubConn{conn}
+	sub := &redis.PubSubConn{Conn: conn}
 
 	if err = sub.Subscribe(p.channel); err != nil {
 		return
@@ -122,8 +122,6 @@ func (p *RedisMonitor) watchNamespace(namespace string, callback KeyContentChang
 			return
 		}
 	}
-
-	return
 }
 
 func (p *RedisMonitor) getRedisConn() (conn redis.Conn, e error) {

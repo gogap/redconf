@@ -79,7 +79,7 @@ func TestRedConfStructParse(t *testing.T) {
 
 	for i := 0; i < len(exceptedKeys); i++ {
 		if _, exist := exceptedKeys[fields[i].String()]; !exist {
-			t.Errorf("err:%s\n%s\n", "fields not exist", fields[i])
+			t.Errorf("err:%s\n%s\n", "fields not exist", fields[i].String())
 			return
 		}
 	}
