@@ -1,13 +1,15 @@
 package redconf
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 )
 
-type convFunc func(typ reflect.Type, value interface{}) (v interface{}, err error)
+type convFunc func(typ reflect.Type, value interface{}, toPtr bool) (v interface{}, err error)
 
 var (
 	convFuncs map[reflect.Kind]convFunc = make(map[reflect.Kind]convFunc)
@@ -31,6 +33,9 @@ func init() {
 	convFuncs[reflect.Float64] = convFloatValue
 	convFuncs[reflect.String] = convStringValue
 	convFuncs[reflect.Slice] = convSliceValue
+	convFuncs[reflect.Struct] = convStructValue
+	convFuncs[reflect.Map] = convMapValue
+	convFuncs[reflect.Ptr] = convPtrValue
 
 	defaultValue[reflect.Bool] = false
 	defaultValue[reflect.Int] = int(0)
@@ -54,15 +59,19 @@ func getZeroValue(typ reflect.Type) (v interface{}) {
 	return
 }
 
-func convValue(typ reflect.Type, value interface{}) (v interface{}, err error) {
+func conv(typ reflect.Type, value interface{}) (v interface{}, err error) {
+	return convValue(typ, value, false)
+}
+
+func convValue(typ reflect.Type, value interface{}, toPtr bool) (v interface{}, err error) {
 	if fn, exist := convFuncs[typ.Kind()]; exist {
-		return fn(typ, value)
+		return fn(typ, value, toPtr)
 	}
 	err = fmt.Errorf("could not conv Kind of %#v", typ.Kind())
 	return
 }
 
-func convIntValue(typ reflect.Type, value interface{}) (v interface{}, err error) {
+func convIntValue(typ reflect.Type, value interface{}, toPtr bool) (v interface{}, err error) {
 	if value == nil {
 		v = getZeroValue(typ)
 		return
@@ -118,7 +127,7 @@ func convIntValue(typ reflect.Type, value interface{}) (v interface{}, err error
 	return
 }
 
-func convUintValue(typ reflect.Type, value interface{}) (v interface{}, err error) {
+func convUintValue(typ reflect.Type, value interface{}, toPtr bool) (v interface{}, err error) {
 	if value == nil {
 		v = getZeroValue(typ)
 		return
@@ -168,7 +177,7 @@ func convUintValue(typ reflect.Type, value interface{}) (v interface{}, err erro
 	return
 }
 
-func convFloatValue(typ reflect.Type, value interface{}) (v interface{}, err error) {
+func convFloatValue(typ reflect.Type, value interface{}, toPtr bool) (v interface{}, err error) {
 	if value == nil {
 		v = getZeroValue(typ)
 		return
@@ -201,7 +210,7 @@ func convFloatValue(typ reflect.Type, value interface{}) (v interface{}, err err
 	return
 }
 
-func convBoolValue(typ reflect.Type, value interface{}) (v interface{}, err error) {
+func convBoolValue(typ reflect.Type, value interface{}, toPtr bool) (v interface{}, err error) {
 	if value == nil {
 		v = getZeroValue(typ)
 		return
@@ -230,12 +239,7 @@ func convBoolValue(typ reflect.Type, value interface{}) (v interface{}, err erro
 	return
 }
 
-func convStringValue(typ reflect.Type, value interface{}) (v interface{}, err error) {
-	if value == nil {
-		v = getZeroValue(typ)
-		return
-	}
-
+func convStringValue(typ reflect.Type, value interface{}, toPtr bool) (v interface{}, err error) {
 	if value == nil {
 		v = getZeroValue(typ)
 		return
@@ -244,42 +248,174 @@ func convStringValue(typ reflect.Type, value interface{}) (v interface{}, err er
 	strV := fmt.Sprintf("%s", value)
 	strV = strings.TrimSpace(strV)
 
-	v = strV
+	if toPtr {
+		v = &strV
+	} else {
+		v = strV
+	}
 
 	return
 }
 
-func convSliceValue(typ reflect.Type, value interface{}) (v interface{}, err error) {
+func convSliceValue(typ reflect.Type, value interface{}, toPtr bool) (v interface{}, err error) {
 	if value == nil {
 		v = getZeroValue(typ)
+		return
+	}
+
+	tmpIvs := reflect.MakeSlice(typ, 1, 1)
+	oneVType := tmpIvs.Index(0).Type()
+
+	strV := fmt.Sprintf("%s", value)
+	strV = strings.TrimSpace(strV)
+
+	switch oneVType.Kind() {
+	case reflect.Bool,
+		reflect.Int,
+		reflect.Int8,
+		reflect.Int16,
+		reflect.Int32,
+		reflect.Int64,
+		reflect.Uint,
+		reflect.Uint8,
+		reflect.Uint16,
+		reflect.Uint32,
+		reflect.Uint64,
+		reflect.Float32,
+		reflect.Float64,
+		reflect.String:
+		{
+
+			strVs := strings.Split(strV, ",")
+
+			if strV == "" || strVs == nil || len(strVs) == 0 {
+				v = reflect.MakeSlice(typ, 0, 0).Interface()
+				return
+			}
+
+			iVs := reflect.MakeSlice(typ, 0, len(strVs))
+
+			for i := 0; i < len(strVs); i++ {
+				var oneV interface{}
+				if oneV, err = convValue(oneVType, strVs[i], false); err != nil {
+					return
+				}
+
+				iVs = reflect.Append(iVs, reflect.ValueOf(oneV))
+			}
+
+			v = iVs.Interface()
+		}
+	case reflect.Map:
+		{
+			v, err = convMapValue(typ, value, false)
+		}
+	case reflect.Struct:
+		{
+			v, err = convStructSliceValue(typ, strV)
+		}
+	case reflect.Ptr:
+		{
+			if oneVType.Elem().Kind() == reflect.Struct {
+				v, err = convStructSliceValue(typ, strV)
+			}
+		}
+	}
+
+	return
+}
+
+func convStructSliceValue(typ reflect.Type, str string) (v interface{}, err error) {
+	if str == "" {
+		return
+	}
+
+	sV := reflect.New(typ).Interface()
+
+	buf := bytes.NewBufferString(str)
+
+	decoder := json.NewDecoder(buf)
+	decoder.UseNumber()
+
+	if err = decoder.Decode(&sV); err != nil {
+		return
+	}
+
+	v = reflect.Indirect(reflect.ValueOf(sV)).Interface()
+
+	return
+}
+
+func convStructValue(typ reflect.Type, value interface{}, toPtr bool) (v interface{}, err error) {
+	if value == nil {
+		v = reflect.New(typ).Elem().Interface()
 		return
 	}
 
 	strV := fmt.Sprintf("%s", value)
 	strV = strings.TrimSpace(strV)
 
-	strVs := strings.Split(strV, ",")
-
-	if strVs == nil || len(strVs) == 0 {
-		v = reflect.MakeSlice(typ, 0, 0).Interface()
+	if strV == "" {
+		v = reflect.New(typ).Elem().Interface()
 		return
 	}
 
-	iVs := reflect.MakeSlice(typ, 0, len(strVs))
-	tmpIvs := reflect.MakeSlice(typ, 1, 1)
+	buf := bytes.NewBufferString(strV)
 
-	oneVType := tmpIvs.Index(0).Type()
+	decoder := json.NewDecoder(buf)
 
-	for i := 0; i < len(strVs); i++ {
-		var oneV interface{}
-		if oneV, err = convValue(oneVType, strVs[i]); err != nil {
-			return
-		}
+	decoder.UseNumber()
 
-		iVs = reflect.Append(iVs, reflect.ValueOf(oneV))
+	v = reflect.New(typ).Elem().Interface()
+
+	if err = decoder.Decode(&v); err != nil {
+		return
 	}
 
-	v = iVs.Interface()
+	return
+}
+
+func convPtrValue(typ reflect.Type, value interface{}, toPtr bool) (v interface{}, err error) {
+
+	if value == nil {
+		return
+	}
+
+	var newV interface{}
+	if newV, err = convValue(typ.Elem(), value, true); err != nil {
+		return
+	}
+
+	v = newV
+
+	return
+}
+
+func convMapValue(typ reflect.Type, value interface{}, toPtr bool) (v interface{}, err error) {
+	if value == nil {
+		return
+	}
+
+	strV := fmt.Sprintf("%s", value)
+	strV = strings.TrimSpace(strV)
+
+	if strV == "" {
+		v = nil
+		return
+	}
+
+	buf := bytes.NewBufferString(strV)
+
+	decoder := json.NewDecoder(buf)
+	decoder.UseNumber()
+
+	newV := reflect.New(typ).Interface()
+
+	if err = decoder.Decode(&newV); err != nil {
+		return
+	}
+
+	v = reflect.Indirect(reflect.ValueOf(newV)).Interface()
 
 	return
 }

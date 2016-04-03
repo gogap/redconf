@@ -8,8 +8,13 @@ import (
 	"time"
 )
 
+type Account struct {
+	Name     string
+	Password string
+}
+
 type ServerConfig struct {
-	Host     string
+	Host     *string
 	Port     int
 	AllowIPs []string
 }
@@ -20,8 +25,10 @@ type LogConfig struct {
 }
 
 type AppConfig struct {
-	Server ServerConfig
-	Log    LogConfig
+	Server    ServerConfig
+	Log       LogConfig
+	Accounts  []Account
+	BlackList []string
 }
 
 func main() {
@@ -86,7 +93,7 @@ func main() {
 				string(data))
 
 			if currentString != preString {
-				Clear()
+				//Clear()
 				fmt.Println(currentString)
 				preString = currentString
 			}

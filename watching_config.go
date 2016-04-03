@@ -53,7 +53,11 @@ func (p *Field) set(v interface{}) {
 
 	val = val.FieldByName(p.name)
 
-	val.Set(reflect.ValueOf(v))
+	if val.Kind() == reflect.Ptr && reflect.Zero(val.Type()) != v {
+		val.Set(reflect.ValueOf(v))
+	} else {
+		val.Set(reflect.ValueOf(v))
+	}
 
 }
 
@@ -168,8 +172,14 @@ func (p *WatchingConfig) getStructFields(parents []string, val reflect.Value, le
 	var tmpFields []*Field
 
 	for i := 0; i < t.NumField(); i++ {
-		switch val.Field(i).Kind() {
-		case reflect.Struct, reflect.Ptr:
+		vKind := val.Field(i).Kind()
+
+		if vKind == reflect.Ptr {
+			vKind = val.Field(i).Type().Elem().Kind()
+		}
+
+		switch vKind {
+		case reflect.Struct:
 			{
 				var tFields []*Field
 				var nextVal reflect.Value
@@ -221,12 +231,16 @@ func getRelValueAndType(val reflect.Value) (retV reflect.Value, retType reflect.
 	isSupport = true
 
 	if val.Kind() == reflect.Ptr {
-		if val.IsNil() {
-			retV = reflect.New(val.Type().Elem())
-			retType = val.Type().Elem()
+		if val.Type().Elem().Kind() == reflect.Struct {
+			if val.IsNil() {
+				retV = reflect.New(val.Type().Elem())
+				retType = val.Type().Elem()
+			} else {
+				retV = val.Elem()
+				retType = reflect.Indirect(val).Type()
+			}
 		} else {
-			retV = val.Elem()
-			retType = reflect.Indirect(val).Type()
+			isSupport = false
 		}
 	} else if val.Kind() == reflect.Struct {
 		retType = val.Type()

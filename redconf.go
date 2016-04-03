@@ -160,8 +160,6 @@ func (p *RedConf) onMonitorError(namespace string, err error) {
 		return
 	}
 
-	fmt.Println(err)
-
 	time.Sleep(time.Second * 5)
 
 	p.monitor.Watch(p.namespace, p.onKeyContentChanged, p.onMonitorError)
@@ -175,7 +173,7 @@ func (p *RedConf) setFieldValue(keyName string, value interface{}) (err error) {
 	}
 
 	var fv interface{}
-	if fv, err = convValue(field.Type(), value); err != nil {
+	if fv, err = conv(field.Type(), value); err != nil {
 		return
 	}
 
