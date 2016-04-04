@@ -88,3 +88,21 @@ OK
 ```
 
 Then you will see the change from your terminal
+
+
+- if you want subscribe the value change event, you could do as following:
+
+```go
+func onValueChangedSubscriber(event redconf.OnValueChangedEvent) {
+	var err error
+	var data []byte
+	if data, err = json.MarshalIndent(&event, "", "    "); err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(string(data))
+}
+
+
+redConf.Subscribe(onValueChangedSubscriber)
+```
