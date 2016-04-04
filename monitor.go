@@ -16,7 +16,7 @@ type Monitor interface {
 }
 
 var (
-	monitorDrivers map[string]NewMonitorFunc = make(map[string]NewMonitorFunc)
+	monitorDrivers = make(map[string]NewMonitorFunc)
 
 	monitorLocker sync.Mutex
 )

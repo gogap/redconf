@@ -31,6 +31,16 @@ type AppConfig struct {
 	BlackList []string
 }
 
+func onValueChangedSubscriber(event redconf.OnValueChangedEvent) {
+	var err error
+	var data []byte
+	if data, err = json.MarshalIndent(&event, "", "    "); err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(string(data))
+}
+
 func main() {
 
 	var err error
@@ -72,6 +82,8 @@ func main() {
 		return
 	}
 
+	redConf.Subscribe(onValueChangedSubscriber)
+
 	keys := redConf.Keys()
 
 	strKeys := strings.Join(keys, ",\n")
@@ -93,12 +105,10 @@ func main() {
 				string(data))
 
 			if currentString != preString {
-				//Clear()
+				Clear()
 				fmt.Println(currentString)
 				preString = currentString
 			}
-
-			fmt.Printf("\r%s", time.Now().Format("2006-01-02 15:04:05"))
 		}
 
 		time.Sleep(time.Second)

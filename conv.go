@@ -12,9 +12,9 @@ import (
 type convFunc func(typ reflect.Type, value interface{}, toPtr bool) (v interface{}, err error)
 
 var (
-	convFuncs map[reflect.Kind]convFunc = make(map[reflect.Kind]convFunc)
+	convFuncs = make(map[reflect.Kind]convFunc)
 
-	defaultValue map[reflect.Kind]interface{} = make(map[reflect.Kind]interface{})
+	defaultValue = make(map[reflect.Kind]interface{})
 )
 
 func init() {

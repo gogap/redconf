@@ -6,6 +6,16 @@ import (
 	"time"
 )
 
+type OnValueChangedSubscriber func(event OnValueChangedEvent)
+
+type OnValueChangedEvent struct {
+	Namespace   string
+	Key         string
+	BeforeValue interface{}
+	AfterValue  interface{}
+	UpdateTime  time.Time
+}
+
 type RedConf struct {
 	namespace string
 
@@ -17,6 +27,9 @@ type RedConf struct {
 	monitor Monitor
 
 	confLock sync.Mutex
+
+	subscriber      map[*OnValueChangedSubscriber]bool
+	subscribersLock sync.Mutex
 }
 
 func New(namespace string, storage Storage, monitor Monitor) (redConf *RedConf, err error) {
@@ -37,6 +50,7 @@ func New(namespace string, storage Storage, monitor Monitor) (redConf *RedConf, 
 		monitor:          monitor,
 		watching:         make(map[string]*WatchingConfig),
 		watchingKeyIndex: make(map[string]*Field),
+		subscriber:       make(map[*OnValueChangedSubscriber]bool),
 	}
 
 	return
@@ -60,10 +74,22 @@ func (p *RedConf) Watch(vals ...interface{}) (err error) {
 	return p.WatchWithConfig(confs...)
 }
 
+func (p *RedConf) Subscribe(subscribers ...OnValueChangedSubscriber) {
+	p.subscribersLock.Lock()
+	defer p.subscribersLock.Unlock()
+
+	for _, s := range subscribers {
+		if s == nil {
+			continue
+		}
+		p.subscriber[&s] = true
+	}
+}
+
 func (p *RedConf) Keys() []string {
 	var keys []string
 
-	for k, _ := range p.watchingKeyIndex {
+	for k := range p.watchingKeyIndex {
 		keys = append(keys, k)
 	}
 
@@ -121,7 +147,7 @@ func (p *RedConf) Namespace() string {
 
 func (p *RedConf) syncKeys(keys ...string) (err error) {
 
-	var kvs map[string]interface{} = make(map[string]interface{})
+	var kvs = make(map[string]interface{})
 
 	for _, key := range keys {
 		var val interface{}
@@ -172,12 +198,32 @@ func (p *RedConf) setFieldValue(keyName string, value interface{}) (err error) {
 		return
 	}
 
-	var fv interface{}
-	if fv, err = conv(field.Type(), value); err != nil {
+	var newVal interface{}
+	if newVal, err = conv(field.Type(), value); err != nil {
 		return
 	}
 
-	field.set(fv)
+	currentVal := field.Value()
+
+	if fmt.Sprintf("%v", currentVal) == fmt.Sprintf("%v", newVal) {
+		return
+	}
+
+	field.set(newVal)
+
+	event := OnValueChangedEvent{
+		Namespace:   p.namespace,
+		Key:         keyName,
+		BeforeValue: currentVal,
+		AfterValue:  newVal,
+		UpdateTime:  time.Now(),
+	}
+
+	for s := range p.subscriber {
+		if s != nil {
+			((*s)(event))
+		}
+	}
 
 	return
 }

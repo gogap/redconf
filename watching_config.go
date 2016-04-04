@@ -7,60 +7,6 @@ import (
 	"sync"
 )
 
-type Field struct {
-	name        string
-	parents     []string
-	structField reflect.StructField
-	topVal      interface{}
-	level       int
-	str         string
-}
-
-func (p *Field) Name() string {
-	return p.name
-}
-
-func (p *Field) Type() reflect.Type {
-	return p.structField.Type
-}
-
-func (p *Field) Kind() reflect.Kind {
-	return p.structField.Type.Kind()
-}
-
-func (p *Field) Level() int {
-	return p.level
-}
-
-func (p *Field) String() string {
-	return p.str
-}
-
-func (p *Field) Parents() []string {
-	return p.parents
-}
-
-func (p *Field) set(v interface{}) {
-
-	val := reflect.ValueOf(p.topVal).Elem()
-
-	for _, parent := range p.parents {
-		val = val.FieldByName(parent)
-		if val.Kind() == reflect.Ptr {
-			val = val.Elem()
-		}
-	}
-
-	val = val.FieldByName(p.name)
-
-	if val.Kind() == reflect.Ptr && reflect.Zero(val.Type()) != v {
-		val.Set(reflect.ValueOf(v))
-	} else {
-		val.Set(reflect.ValueOf(v))
-	}
-
-}
-
 type WatchingConfig struct {
 	name  string
 	value interface{}

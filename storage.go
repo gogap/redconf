@@ -13,7 +13,7 @@ type Storage interface {
 }
 
 var (
-	storageDrivers map[string]NewStorageFunc = make(map[string]NewStorageFunc)
+	storageDrivers = make(map[string]NewStorageFunc)
 
 	storageLocker sync.Mutex
 )
