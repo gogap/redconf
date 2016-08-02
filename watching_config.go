@@ -69,10 +69,6 @@ func (p *WatchingConfig) Name() string {
 	return p.name
 }
 
-func (p *WatchingConfig) Value(v interface{}) {
-	return
-}
-
 func (p *WatchingConfig) Fields() []Field {
 	var fs []Field
 
